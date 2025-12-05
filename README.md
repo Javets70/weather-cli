@@ -36,3 +36,9 @@ uv pip install -e .
 # Now use it:
 weather fetch London
 ```
+
+### Commands
+List all the commands using
+```
+  uv run weather --help
+```
