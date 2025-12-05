@@ -70,6 +70,57 @@ def display_weather_detail(weather: WeatherData):
     console.print(panel)
 
 
+def display_forecast_table(forecast_list: list[WeatherData]):
+    """Display forecast data in a formatted table."""
+    if not forecast_list:
+        console.print("[yellow]No forecast records found.[/yellow]")
+        return
+
+    table = Table(title="Weather Forecast", show_header=True, header_style="bold magenta")
+    table.add_column("Date/Time", style="cyan", width=16)
+    table.add_column("Temp (°C)", justify="right", style="yellow")
+    table.add_column("Feels Like", justify="right", style="yellow")
+    table.add_column("Description", style="green")
+    table.add_column("Rain %", justify="right", style="blue")
+    table.add_column("Humidity", justify="right", style="magenta")
+    table.add_column("Wind (m/s)", justify="right", style="white")
+
+    for forecast in forecast_list:
+        table.add_row(
+            forecast.forecast_time.strftime("%m/%d %H:%M"),
+            f"{forecast.temperature:.1f}",
+            f"{forecast.feels_like:.1f}",
+            forecast.description.title(),
+            f"{forecast.humidity}%",
+            f"{forecast.wind_speed:.1f}",
+        )
+
+    console.print(table)
+
+
+def display_forecast_detail(forecast: WeatherData):
+    """Display detailed forecast information."""
+    content = f"""
+[bold cyan]Location:[/bold cyan] {forecast.city}, {forecast.country}
+[bold yellow]Forecast Time:[/bold yellow] {forecast.forecast_time.strftime("%Y-%m-%d %H:%M")}
+[bold yellow]Temperature:[/bold yellow] {forecast.temperature:.1f}°C 
+[bold blue]Range:[/bold blue] {forecast.temp_min:.1f}°C - {forecast.temp_max:.1f}°C
+[bold green]Description:[/bold green] {forecast.description.title()}
+[bold magenta]Humidity:[/bold magenta] {forecast.humidity}%
+[bold white]Pressure:[/bold white] {forecast.pressure} hPa
+[bold cyan]Wind Speed:[/bold cyan] {forecast.wind_speed} m/s
+[bold yellow]Cloud Cover:[/bold yellow] {forecast.clouds}%
+[bold dim]Fetched At:[/bold dim] {forecast.timestamp.strftime("%Y-%m-%d %H:%M:%S")}
+    """
+
+    panel = Panel(
+        content.strip(),
+        title=f"[bold]Forecast Details - ID: {forecast.id}[/bold]",
+        border_style="blue",
+    )
+    console.print(panel)
+
+
 @app.command()
 def fetch(
     city: str = typer.Argument(..., help="City name"),
@@ -176,6 +227,68 @@ def show(record_id: int = typer.Argument(..., help="Weather record ID")):
 
     except Exception as e:
         console.print(f"[red]✗ Error:[/red] {str(e)}")
+        raise typer.Exit(code=1)
+
+
+@app.command()
+def forecast(
+    city: str = typer.Argument(..., help="City name"),
+    country: str | None = typer.Option(None, "--country", "-c", help="Country code (e.g., US, GB)"),
+    days: int = typer.Option(5, "--days", "-d", help="Number of days (1-5)"),
+    save: bool = typer.Option(True, "--save/--no-save", help="Save forecast to database"),
+):
+    """
+    Fetch weather forecast for a city (3-hour intervals).
+
+    Example:
+        weather-cli forecast Tokyo --days 3
+        weather-cli forecast "New York" --country US --days 5
+    """
+    try:
+        # Validate days
+        if not 1 <= days <= 5:
+            console.print("[red]✗ Error:[/red] Days must be between 1 and 5")
+            raise typer.Exit(code=1)
+
+        with Progress(
+            SpinnerColumn(),
+            TextColumn("[progress.description]{task.description}"),
+            console=console,
+        ) as progress:
+            progress.add_task(description=f"Fetching {days}-day forecast for {city}...", total=None)
+
+            client = WeatherAPIClient()
+            forecasts = client.fetch_forecast(city, country, days)
+
+        # Save to database if requested
+        if save:
+            for forecast_item in forecasts:
+                forecast_item.id = db.save_weather(forecast_item)
+            console.print(f"[green]✓[/green] {len(forecasts)} forecast records saved to database!")
+        else:
+            console.print(f"[green]✓[/green] Fetched {len(forecasts)} forecast records")
+
+        # Display forecast table
+        display_forecast_table(forecasts)
+
+    except APIError as e:
+        console.print(f"[red]✗ API Error:[/red] {str(e)}")
+        raise typer.Exit(code=1)
+
+    except Timeout:
+        console.print("[red]✗ Request timed out.[/red] Please check your internet connection.")
+        raise typer.Exit(code=1)
+
+    except ConnectionError as e:
+        console.print(f"[red]✗ Network Error:[/red] {str(e)}")
+        raise typer.Exit(code=1)
+
+    except ValueError as e:
+        console.print(f"[red]✗ Invalid Response:[/red] {str(e)}")
+        raise typer.Exit(code=1)
+
+    except Exception as e:
+        console.print(f"[red]✗ Unexpected Error:[/red] {str(e)}")
         raise typer.Exit(code=1)
 
 

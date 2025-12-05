@@ -18,9 +18,7 @@ class WeatherData:
     wind_speed: float
     clouds: int
     timestamp: datetime
+    forecast_time: datetime
 
     def __str__(self) -> str:
-        return (
-            f"Weather in {self.city}, {self.country}: "
-            f"{self.temperature}°C, {self.description}"
-        )
+        return f"Weather in {self.city}, {self.country}: {self.temperature}°C, {self.description}"

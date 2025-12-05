@@ -38,6 +38,7 @@ class Database:
                     wind_speed REAL NOT NULL,
                     clouds INTEGER NOT NULL,
                     timestamp DATETIME NOT NULL,
+                    forecast_time DATETIME NOT NULL,
                     UNIQUE(city, country)
                 )
             """)
